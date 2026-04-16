@@ -225,18 +225,21 @@ export default function NewStrategyPage() {
         <div className="form-section">
           <h2 style={{ fontFamily: 'var(--f)', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Testo della Strategia</h2>
           <p style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 8 }}>
-            Incolla qui il testo completo. Per distribuirlo automaticamente nelle sezioni, usa delle intestazioni.
+            Incolla qui il testo completo. Supporta markdown e si distribuisce nelle sezioni tramite intestazioni.
           </p>
-          <div style={{ fontSize: 12, color: 'var(--t3)', background: 'rgba(27,58,123,.05)', border: '1px solid rgba(27,58,123,.12)', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--edu)' }}>Formati supportati per le intestazioni:</strong><br />
-            <code>## Identità</code> oppure <code>Identità:</code> oppure <code>IDENTITÀ</code><br />
-            Parole chiave riconosciute: Identità, Analisi Social, Personas, Competitor, Sintesi, SWOT, Logo, Palette, Font, Reel, Post, Mockup, Contenuti, Fasi, Contatti.<br />
+          <div style={{ fontSize: 12, color: 'var(--t3)', background: 'rgba(27,58,123,.05)', border: '1px solid rgba(27,58,123,.12)', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.7 }}>
+            <strong style={{ color: 'var(--edu)' }}>Intestazioni di sezione</strong> (obbligatorie per distribuire il testo):<br />
+            <code>## Identità</code> · <code>## Analisi Social</code> · <code>## Personas</code> · <code>## Competitor</code> · <code>## Sintesi</code> · <code>## SWOT</code> · <code>## Logo</code> · <code>## Palette</code> · <code>## Font</code> · <code>## Reel</code> · <code>## Post</code> · <code>## Mockup</code> · <code>## Contenuti</code> · <code>## Fasi</code> · <code>## Contatti</code>
+            <br /><br />
+            <strong style={{ color: 'var(--edu)' }}>Formattazione supportata dentro le sezioni</strong>:<br />
+            <code>**grassetto**</code> · <code>*corsivo*</code> · <code>- elenco</code> · <code>1. numerato</code> · <code>[link](url)</code> · <code>`codice`</code> · <code>&gt; citazione</code>
+            <br /><br />
             Se non inserisci intestazioni, tutto il testo finirà nella sezione <strong>Sintesi</strong>.
           </div>
           <textarea
             className="form-textarea"
             style={{ minHeight: 300 }}
-            placeholder={`## Identità\nIl brand è...\n\n## SWOT\nPunti di forza: ...\nDebolezze: ...\n\n## Personas\nIl target principale è...`}
+            placeholder={`## Identità\nIl brand è **un'agenzia creativa** specializzata in...\n\n## SWOT\nPunti di forza: team bilingue, *prezzi competitivi*.\nDebolezze: brand awareness limitata.\nOpportunità: crescita del turismo.\nMinacce: agenzie internazionali.\n\n## Fasi\n1. Audit iniziale\n2. Produzione contenuti\n3. Scaling`}
             value={mainText}
             onChange={e => setMainText(e.target.value)}
           />
@@ -344,7 +347,8 @@ function buildSectionContent(
   strategyName: string
 ): string {
   const text = sectionText || mainText || '';
-  const paragraphs = text.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('\n');
+  // Render inline markdown (bold, italic, lists, links, etc.) into HTML
+  const rendered = renderMarkdown(text);
 
   switch (type) {
     case 'cover':
@@ -366,30 +370,37 @@ function buildSectionContent(
       return sectionText ? buildCompetitorContent(sectionText) : getPlaceholderCompetitor();
 
     default:
-      // FIX: check `text` (which falls back to mainText) instead of only `sectionText`
       return text
-        ? `<div class="content-card">${paragraphs}</div>`
+        ? `<div class="content-card">${rendered}</div>`
         : `<div class="content-card"><p style="color:var(--t3);font-style:italic;">Contenuto da inserire per questa sezione. Clicca "Modifica" per aggiungere il testo.</p></div>`;
   }
 }
 
 function buildSwotContent(text: string): string {
+  // Try to split the four SWOT quadrants from labels in the text.
+  // Labels accepted (case-insensitive): "punti di forza", "forza", "strengths"
+  // "debolezze", "weaknesses" | "opportunità", "opportunita", "opportunities"
+  // "minacce", "threats"
+  const quadrants = parseSwotQuadrants(text);
+  const fallback = (k: keyof typeof quadrants) =>
+    quadrants[k] ? renderMarkdown(quadrants[k]) : `<p style="color:var(--t3);font-style:italic;">Da definire</p>`;
+
   return `<div class="swot-grid">
     <div class="swot-card" style="border-top:4px solid var(--green);">
       <h4 style="color:var(--green);">💪 Punti di Forza</h4>
-      <p style="font-size:12px;color:var(--t2);line-height:1.6;">${text}</p>
+      <div style="font-size:12px;color:var(--t2);line-height:1.6;">${fallback('strengths')}</div>
     </div>
     <div class="swot-card" style="border-top:4px solid var(--amber);">
       <h4 style="color:var(--amber);">⚠️ Debolezze</h4>
-      <p style="font-size:12px;color:var(--t2);line-height:1.6;">Da definire</p>
+      <div style="font-size:12px;color:var(--t2);line-height:1.6;">${fallback('weaknesses')}</div>
     </div>
     <div class="swot-card" style="border-top:4px solid #3b82f6;">
       <h4 style="color:#3b82f6;">🚀 Opportunità</h4>
-      <p style="font-size:12px;color:var(--t2);line-height:1.6;">Da definire</p>
+      <div style="font-size:12px;color:var(--t2);line-height:1.6;">${fallback('opportunities')}</div>
     </div>
     <div class="swot-card" style="border-top:4px solid var(--red);">
       <h4 style="color:var(--red);">🛑 Minacce</h4>
-      <p style="font-size:12px;color:var(--t2);line-height:1.6;">Da definire</p>
+      <div style="font-size:12px;color:var(--t2);line-height:1.6;">${fallback('threats')}</div>
     </div>
   </div>`;
 }
@@ -401,7 +412,7 @@ function getPlaceholderSwot(): string {
 function buildPersonasContent(text: string): string {
   return `<div class="grid-3"><div class="persona-card" style="border-top:4px solid #2D6A4F;">
     <h4 style="color:#2D6A4F;">👤 Persona 1</h4>
-    <p style="font-size:12px;color:var(--t2);line-height:1.6;">${text}</p>
+    <div style="font-size:12px;color:var(--t2);line-height:1.6;">${renderMarkdown(text)}</div>
   </div></div>`;
 }
 
@@ -423,7 +434,7 @@ function getPlaceholderPersonas(client: string): string {
 }
 
 function buildCompetitorContent(text: string): string {
-  return `<div class="content-card"><p>${text}</p></div>`;
+  return `<div class="content-card">${renderMarkdown(text)}</div>`;
 }
 
 function getPlaceholderCompetitor(): string {
@@ -554,5 +565,215 @@ export function parseMainText(mainText: string): Record<string, string> {
     if (currentType) buffer.push(line);
   }
   flush();
+  return result;
+}
+
+/* ============================================
+   MARKDOWN RENDERER (lightweight, no deps)
+   Supports: #/##/### headings (h3-h4), **bold**, *italic*, _italic_,
+   ~~strike~~, `code`, [link](url), bullet lists (- * +), ordered lists (1.),
+   > blockquotes, --- dividers, paragraphs separated by blank lines.
+   Keeps existing HTML intact (so hand-written HTML still works).
+   ============================================ */
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderInline(s: string): string {
+  // Inline tokens applied AFTER block-level parsing.
+  // Careful ordering: code first (isolates its content), then bold/italic, then links.
+  let out = s;
+
+  // Inline code `...`
+  out = out.replace(/`([^`]+)`/g, (_m, c) => `<code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:4px;font-size:.9em;">${escapeHtml(c)}</code>`);
+
+  // Links [text](url)
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, t, u) =>
+    `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">${t}</a>`);
+
+  // Bold **text** or __text__
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+  // Italic *text* or _text_  (avoid matching bold leftovers)
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  out = out.replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>');
+
+  // Strikethrough ~~text~~
+  out = out.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+  return out;
+}
+
+export function renderMarkdown(raw: string): string {
+  if (!raw) return '';
+  // If the text already looks like HTML (contains a block-level tag), don't touch it.
+  if (/<(div|p|h[1-6]|ul|ol|li|table|section|article|blockquote|pre)\b/i.test(raw)) {
+    return raw;
+  }
+
+  const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+
+  // Simple state machine: we keep track of whether we're inside a <ul>, <ol>, or <p>.
+  let inList: 'ul' | 'ol' | null = null;
+  let paragraphBuffer: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraphBuffer.length) {
+      const txt = renderInline(paragraphBuffer.join(' ').trim());
+      if (txt) out.push(`<p style="margin:0 0 10px;">${txt}</p>`);
+      paragraphBuffer = [];
+    }
+  };
+
+  const closeList = () => {
+    if (inList) {
+      out.push(`</${inList}>`);
+      inList = null;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\s+$/, '');
+
+    // Blank line: flush current paragraph/list
+    if (!line.trim()) {
+      flushParagraph();
+      closeList();
+      continue;
+    }
+
+    // Horizontal rule --- or ***
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim())) {
+      flushParagraph();
+      closeList();
+      out.push('<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />');
+      continue;
+    }
+
+    // Headings # / ## / ### / ####
+    const h = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (h) {
+      flushParagraph();
+      closeList();
+      const level = Math.min(h[1].length, 4) + 2; // h1 -> h3, h2 -> h4, max h6
+      const tag = `h${Math.min(level, 6)}`;
+      out.push(`<${tag} style="font-family:var(--f);font-weight:700;margin:12px 0 8px;">${renderInline(h[2])}</${tag}>`);
+      continue;
+    }
+
+    // Blockquote
+    const bq = line.match(/^>\s?(.*)$/);
+    if (bq) {
+      flushParagraph();
+      closeList();
+      out.push(`<blockquote style="border-left:3px solid var(--accent);padding:4px 12px;margin:10px 0;color:var(--t2);font-style:italic;">${renderInline(bq[1])}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list item
+    const ul = line.match(/^\s*[-*+]\s+(.+)$/);
+    if (ul) {
+      flushParagraph();
+      if (inList !== 'ul') {
+        closeList();
+        out.push('<ul style="margin:6px 0 10px 22px;padding:0;list-style:disc;">');
+        inList = 'ul';
+      }
+      out.push(`<li style="margin:2px 0;">${renderInline(ul[1])}</li>`);
+      continue;
+    }
+
+    // Ordered list item
+    const ol = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (ol) {
+      flushParagraph();
+      if (inList !== 'ol') {
+        closeList();
+        out.push('<ol style="margin:6px 0 10px 22px;padding:0;list-style:decimal;">');
+        inList = 'ol';
+      }
+      out.push(`<li style="margin:2px 0;">${renderInline(ol[1])}</li>`);
+      continue;
+    }
+
+    // Default: part of a paragraph
+    closeList();
+    paragraphBuffer.push(line);
+  }
+
+  flushParagraph();
+  closeList();
+
+  return out.join('\n');
+}
+
+/* ============================================
+   SWOT QUADRANT PARSER
+   Splits free text like "Punti di forza: ... Debolezze: ..."
+   into the four SWOT buckets.
+   ============================================ */
+
+type SwotQuadrants = {
+  strengths: string;
+  weaknesses: string;
+  opportunities: string;
+  threats: string;
+};
+
+const SWOT_LABELS: Array<{ key: keyof SwotQuadrants; patterns: RegExp }> = [
+  { key: 'strengths',     patterns: /^\s*(?:💪\s*)?(?:punti\s+di\s+forza|forza|forze|strengths|fortezze)\s*[:：]\s*/i },
+  { key: 'weaknesses',    patterns: /^\s*(?:⚠️\s*)?(?:debolezze|punti\s+di\s+debolezza|weaknesses)\s*[:：]\s*/i },
+  { key: 'opportunities', patterns: /^\s*(?:🚀\s*)?(?:opportunit[àa]|opportunities)\s*[:：]\s*/i },
+  { key: 'threats',       patterns: /^\s*(?:🛑\s*)?(?:minacce|threats)\s*[:：]\s*/i },
+];
+
+export function parseSwotQuadrants(text: string): SwotQuadrants {
+  const result: SwotQuadrants = { strengths: '', weaknesses: '', opportunities: '', threats: '' };
+  if (!text) return result;
+
+  const lines = text.split('\n');
+  let currentKey: keyof SwotQuadrants | null = null;
+  const buckets: Record<keyof SwotQuadrants, string[]> = {
+    strengths: [], weaknesses: [], opportunities: [], threats: [],
+  };
+
+  for (const line of lines) {
+    let matchedKey: keyof SwotQuadrants | null = null;
+    let remainder = line;
+
+    for (const { key, patterns } of SWOT_LABELS) {
+      const m = line.match(patterns);
+      if (m) {
+        matchedKey = key;
+        remainder = line.slice(m[0].length);
+        break;
+      }
+    }
+
+    if (matchedKey) {
+      currentKey = matchedKey;
+      if (remainder.trim()) buckets[currentKey].push(remainder);
+    } else if (currentKey) {
+      buckets[currentKey].push(line);
+    }
+  }
+
+  for (const k of Object.keys(buckets) as (keyof SwotQuadrants)[]) {
+    result[k] = buckets[k].join('\n').trim();
+  }
+
+  // If nothing matched (user just wrote a blob), put everything in strengths
+  // so at least the first quadrant shows content.
+  const anyMatched = Object.values(result).some(v => v.length > 0);
+  if (!anyMatched) result.strengths = text.trim();
+
   return result;
 }
