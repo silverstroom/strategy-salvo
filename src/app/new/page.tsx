@@ -532,7 +532,7 @@ function detectHeading(line: string): string | null {
   return null;
 }
 
-export function parseMainText(mainText: string): Record<string, string> {
+function parseMainText(mainText: string): Record<string, string> {
   if (!mainText || !mainText.trim()) return {};
 
   const lines = mainText.split('\n');
@@ -611,7 +611,7 @@ function renderInline(s: string): string {
   return out;
 }
 
-export function renderMarkdown(raw: string): string {
+function renderMarkdown(raw: string): string {
   if (!raw) return '';
   // If the text already looks like HTML (contains a block-level tag), don't touch it.
   if (/<(div|p|h[1-6]|ul|ol|li|table|section|article|blockquote|pre)\b/i.test(raw)) {
@@ -735,7 +735,7 @@ const SWOT_LABELS: Array<{ key: keyof SwotQuadrants; patterns: RegExp }> = [
   { key: 'threats',       patterns: /^\s*(?:🛑\s*)?(?:minacce|threats)\s*[:：]\s*/i },
 ];
 
-export function parseSwotQuadrants(text: string): SwotQuadrants {
+function parseSwotQuadrants(text: string): SwotQuadrants {
   const result: SwotQuadrants = { strengths: '', weaknesses: '', opportunities: '', threats: '' };
   if (!text) return result;
 
