@@ -83,9 +83,21 @@ export default function NewStrategyPage() {
       await new Promise(r => setTimeout(r, 400 + Math.random() * 300));
     }
 
+    // Parse the main text looking for section-style headings (#, ##, "Identità:", etc.)
+    const parsedFromMain = parseMainText(mainText);
+    const anyHeadingFound = Object.keys(parsedFromMain).length > 0;
+
     // Build sections from template + user text
     const sections: StrategySection[] = SECTION_TEMPLATES.map(tmpl => {
-      const sectionContent = sectionTexts[tmpl.type] || '';
+      // Priority: per-section textarea → parsed-from-main by heading → synthesis fallback
+      let sectionContent = sectionTexts[tmpl.type] || parsedFromMain[tmpl.type] || '';
+
+      // If user pasted raw text with NO headings, dump the whole thing in "synthesis"
+      // so at least one section shows the content instead of everything being empty.
+      if (!sectionContent && !anyHeadingFound && tmpl.type === 'synthesis' && mainText.trim()) {
+        sectionContent = mainText;
+      }
+
       const content = buildSectionContent(tmpl.type, sectionContent, mainText, clientName, name);
       return {
         id: crypto.randomUUID(),
@@ -212,13 +224,19 @@ export default function NewStrategyPage() {
         {/* Main text */}
         <div className="form-section">
           <h2 style={{ fontFamily: 'var(--f)', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Testo della Strategia</h2>
-          <p style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20 }}>
-            Inserisci il testo completo della strategia. Verrà distribuito automaticamente nelle sezioni standard.
+          <p style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 8 }}>
+            Incolla qui il testo completo. Per distribuirlo automaticamente nelle sezioni, usa delle intestazioni.
           </p>
+          <div style={{ fontSize: 12, color: 'var(--t3)', background: 'rgba(27,58,123,.05)', border: '1px solid rgba(27,58,123,.12)', padding: '10px 12px', borderRadius: 8, marginBottom: 14, lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--edu)' }}>Formati supportati per le intestazioni:</strong><br />
+            <code>## Identità</code> oppure <code>Identità:</code> oppure <code>IDENTITÀ</code><br />
+            Parole chiave riconosciute: Identità, Analisi Social, Personas, Competitor, Sintesi, SWOT, Logo, Palette, Font, Reel, Post, Mockup, Contenuti, Fasi, Contatti.<br />
+            Se non inserisci intestazioni, tutto il testo finirà nella sezione <strong>Sintesi</strong>.
+          </div>
           <textarea
             className="form-textarea"
             style={{ minHeight: 300 }}
-            placeholder="Incolla qui il testo completo della tua strategia...&#10;&#10;Il contenuto verrà analizzato e distribuito nelle diverse sezioni della presentazione (Identità, Analisi Social, Personas, Competitor, SWOT, ecc.)."
+            placeholder={`## Identità\nIl brand è...\n\n## SWOT\nPunti di forza: ...\nDebolezze: ...\n\n## Personas\nIl target principale è...`}
             value={mainText}
             onChange={e => setMainText(e.target.value)}
           />
@@ -348,7 +366,8 @@ function buildSectionContent(
       return sectionText ? buildCompetitorContent(sectionText) : getPlaceholderCompetitor();
 
     default:
-      return sectionText
+      // FIX: check `text` (which falls back to mainText) instead of only `sectionText`
+      return text
         ? `<div class="content-card">${paragraphs}</div>`
         : `<div class="content-card"><p style="color:var(--t3);font-style:italic;">Contenuto da inserire per questa sezione. Clicca "Modifica" per aggiungere il testo.</p></div>`;
   }
@@ -412,4 +431,128 @@ function getPlaceholderCompetitor(): string {
     <tr><th style="background:#7C3AED;">Competitor</th><th style="background:#7C3AED;">Punti di Forza</th><th style="background:#7C3AED;">Differenziale</th></tr>
     <tr><td>Da definire</td><td style="color:var(--t3);font-style:italic;">—</td><td style="color:var(--t3);font-style:italic;">—</td></tr>
   </table></div>`;
+}
+
+/* ============================================
+   MAIN-TEXT HEADING PARSER
+   Splits the free-form main text into a map
+   { sectionType: contentForThatSection } based
+   on headings like "## Identità", "SWOT:", or "IDENTITÀ".
+   ============================================ */
+
+const SECTION_KEYWORDS: Record<string, string[]> = {
+  'cover': ['cover', 'copertina'],
+  'index': ['sommario', 'indice', 'index'],
+  'identity': ['identita', 'identity', 'brand identity', 'identita del brand', 'brand'],
+  'social-analysis': ['analisi social', 'social analysis', 'social analytics', 'analisi social media', 'social media', 'analisi dei social'],
+  'personas': ['personas', 'buyer personas', 'buyer persona', 'target', 'pubblico', 'audience'],
+  'competitors': ['competitor', 'competitors', 'analisi competitor', 'competitive analysis', 'concorrenti', 'concorrenza'],
+  'synthesis': ['sintesi', 'sintesi strategica', 'synthesis', 'riepilogo', 'executive summary', 'summary'],
+  'swot': ['swot', 'analisi swot'],
+  'logo': ['logo', 'utilizzo del logo', 'brand mark'],
+  'palette': ['palette', 'palette colori', 'colori', 'colors', 'color palette'],
+  'font': ['font', 'tipografia', 'typography', 'caratteri'],
+  'reel-proposals': ['proposte reel', 'reel', 'reels', 'video reel'],
+  'post-proposals': ['proposte post', 'post proposals', 'proposte di post'],
+  'mockup': ['mockup', 'mockup visivi', 'mockups'],
+  'social-posts': ['contenuti social', 'post social', 'social posts', 'contenuti', 'piano editoriale'],
+  'phases': ['fasi operative', 'fasi', 'timeline', 'phases', 'operational phases', 'piano operativo', 'roadmap', 'tempistiche'],
+  'contacts': ['contatti', 'contacts'],
+};
+
+function normalizeHeading(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchSectionType(headingText: string): string | null {
+  const n = normalizeHeading(headingText);
+  if (!n) return null;
+
+  // exact match first
+  for (const [type, kws] of Object.entries(SECTION_KEYWORDS)) {
+    for (const kw of kws) {
+      if (n === normalizeHeading(kw)) return type;
+    }
+  }
+  // contains match (longest keyword wins)
+  let best: { type: string; score: number } | null = null;
+  for (const [type, kws] of Object.entries(SECTION_KEYWORDS)) {
+    for (const kw of kws) {
+      const kwn = normalizeHeading(kw);
+      if (n.includes(kwn) || kwn.includes(n)) {
+        const score = kwn.length;
+        if (!best || score > best.score) best = { type, score };
+      }
+    }
+  }
+  return best?.type || null;
+}
+
+function detectHeading(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  // Markdown: #, ##, ###, etc.
+  const md = trimmed.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+  if (md) return md[1];
+
+  // Label style: "Identità:" or "SWOT :"
+  if (/^[A-Za-zÀ-ÿ][\w\s\-'àèéìòùÀÈÉÌÒÙ]{2,60}:\s*$/.test(trimmed)) {
+    return trimmed.replace(/:\s*$/, '').trim();
+  }
+
+  // All-caps short line (3–50 chars, mostly letters)
+  if (
+    trimmed.length >= 3 &&
+    trimmed.length <= 50 &&
+    trimmed === trimmed.toUpperCase() &&
+    /[A-ZÀ-Ü]/.test(trimmed) &&
+    !/[.!?]$/.test(trimmed)
+  ) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+export function parseMainText(mainText: string): Record<string, string> {
+  if (!mainText || !mainText.trim()) return {};
+
+  const lines = mainText.split('\n');
+  const result: Record<string, string> = {};
+  let currentType: string | null = null;
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (currentType && buffer.length) {
+      const content = buffer.join('\n').trim();
+      if (content) {
+        result[currentType] = result[currentType]
+          ? result[currentType] + '\n\n' + content
+          : content;
+      }
+    }
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const heading = detectHeading(line);
+    if (heading) {
+      const matched = matchSectionType(heading);
+      if (matched) {
+        flush();
+        currentType = matched;
+        continue;
+      }
+    }
+    if (currentType) buffer.push(line);
+  }
+  flush();
+  return result;
 }
